@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'PixTransform',
+  title: 'RT Photo Convertor',
   description: 'A versatile photo converter web app for transforming image files.',
 };
 

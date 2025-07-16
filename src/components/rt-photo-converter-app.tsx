@@ -38,7 +38,7 @@ import { getOptimalSettings } from "@/app/actions";
 type OutputFormat = "jpeg" | "png" | "webp";
 type OptimizationGoal = "web" | "storage" | "quality";
 
-export default function PixTransformApp() {
+export default function RTPhotoConverterApp() {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [sourcePreview, setSourcePreview] = useState<string | null>(null);
   const [sourceDimensions, setSourceDimensions] = useState<{
@@ -238,7 +238,7 @@ export default function PixTransformApp() {
       <Card className="w-full max-w-md text-center shadow-lg">
         <CardHeader>
           <CardTitle className="text-3xl font-bold tracking-tight">
-            PixTransform
+            RT Photo Convertor
           </CardTitle>
           <CardDescription>
             Convert and optimize your images with ease.
