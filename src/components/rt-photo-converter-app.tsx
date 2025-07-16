@@ -16,26 +16,16 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   UploadCloud,
   Download,
   Lock,
   Unlock,
-  Sparkles,
   Loader2,
   Image as ImageIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getOptimalSettings } from "@/app/actions";
 
-type OutputFormat = "jpeg" | "png" | "webp";
-type OptimizationGoal = "web" | "storage" | "quality";
+type OutputFormat = "jpeg" | "png" | "webp" | "gif" | "bmp";
 
 export default function RTPhotoConverterApp() {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
@@ -54,9 +44,6 @@ export default function RTPhotoConverterApp() {
 
   const [maintainAspectRatio, setMaintainAspectRatio] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [optimizationGoal, setOptimizationGoal] =
-    useState<OptimizationGoal>("web");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -138,6 +125,12 @@ export default function RTPhotoConverterApp() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Could not get canvas context");
 
+      // For formats that don't support transparency, fill with white
+      if (outputFormat === 'jpeg' || outputFormat === 'bmp') {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, outputWidth, outputHeight);
+      }
+
       ctx.drawImage(img, 0, 0, outputWidth, outputHeight);
 
       const mimeType = `image/${outputFormat}`;
@@ -145,7 +138,9 @@ export default function RTPhotoConverterApp() {
         outputFormat === "jpeg" || outputFormat === "webp"
           ? outputQuality / 100
           : undefined;
-      const dataUrl = canvas.toDataURL(mimeType, quality);
+          
+      // GIF and BMP do not support quality parameter in toDataURL
+      const dataUrl = canvas.toDataURL(mimeType, (outputFormat === 'jpeg' || outputFormat === 'webp') ? quality : undefined);
       
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, mimeType, quality));
 
@@ -155,9 +150,11 @@ export default function RTPhotoConverterApp() {
       console.error("Conversion error:", error);
       toast({
         title: "Conversion Failed",
-        description: "Could not generate image preview.",
+        description: "Could not generate image preview. The target format might not be supported by your browser.",
         variant: "destructive",
       });
+      setConvertedPreview(null);
+      setConvertedSize(null);
     } finally {
       setIsProcessing(false);
     }
@@ -185,51 +182,6 @@ export default function RTPhotoConverterApp() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-  
-  const handleOptimize = async () => {
-    if (!sourceFile) {
-        toast({ title: "No Image", description: "Please upload an image first.", variant: "destructive"});
-        return;
-    }
-    setIsOptimizing(true);
-    try {
-        const result = await getOptimalSettings({
-            fileName: sourceFile.name,
-            fileType: sourceFile.type,
-            fileSize: sourceFile.size,
-            optimizationGoal: optimizationGoal,
-        });
-
-        if (result.error || !result.data) {
-            throw new Error(result.error || "Unknown error from AI.");
-        }
-        
-        const { format, quality, width, height, reasoning } = result.data;
-        setOutputFormat(format);
-        setOutputQuality(quality);
-        if (width && height && sourceDimensions) {
-          setOutputWidth(width);
-          setOutputHeight(height);
-        } else if (sourceDimensions) {
-          setOutputWidth(sourceDimensions.width);
-          setOutputHeight(sourceDimensions.height);
-        }
-
-        toast({
-            title: "AI Optimization Complete",
-            description: reasoning,
-        });
-
-    } catch (error) {
-        toast({
-            title: "AI Optimization Failed",
-            description: "Could not get settings. Please try again.",
-            variant: "destructive",
-        });
-    } finally {
-        setIsOptimizing(false);
-    }
   };
 
   if (!sourceFile) {
@@ -260,7 +212,7 @@ export default function RTPhotoConverterApp() {
               Click to upload or drag & drop
             </p>
             <p className="text-sm text-muted-foreground">
-              JPG, PNG, GIF, WebP supported
+              JPG, PNG, GIF, WebP, BMP supported
             </p>
           </div>
           <Input
@@ -304,39 +256,6 @@ export default function RTPhotoConverterApp() {
       <div className="space-y-6">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>AI Optimization</CardTitle>
-            <CardDescription>
-              Let AI choose the best settings for your needs.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-            <div className="sm:col-span-2">
-              <Label htmlFor="optimization-goal">Optimization Goal</Label>
-              <Select
-                value={optimizationGoal}
-                onValueChange={(v) => setOptimizationGoal(v as OptimizationGoal)}
-              >
-                <SelectTrigger id="optimization-goal">
-                  <SelectValue placeholder="Select goal..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="web">Web & Sharing</SelectItem>
-                  <SelectItem value="storage">File Size</SelectItem>
-                  <SelectItem value="quality">Best Quality</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="sm:col-span-1">
-              <Button onClick={handleOptimize} disabled={isOptimizing} className="w-full">
-                {isOptimizing ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                Optimize
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg">
-          <CardHeader>
             <CardTitle>Conversion Settings</CardTitle>
             <CardDescription>
               Adjust format, dimensions, and quality.
@@ -350,10 +269,12 @@ export default function RTPhotoConverterApp() {
                 onValueChange={(v) => setOutputFormat(v as OutputFormat)}
                 className="w-full"
               >
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="jpeg">JPG</TabsTrigger>
                   <TabsTrigger value="png">PNG</TabsTrigger>
                   <TabsTrigger value="webp">WebP</TabsTrigger>
+                  <TabsTrigger value="gif">GIF</TabsTrigger>
+                  <TabsTrigger value="bmp">BMP</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
