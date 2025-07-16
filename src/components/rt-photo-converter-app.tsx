@@ -30,7 +30,6 @@ import {
   Sparkles,
   Loader2,
   Image as ImageIcon,
-  ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getOptimalSettings } from "@/app/actions";
@@ -279,13 +278,13 @@ export default function RTPhotoConverterApp() {
   return (
     <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
       {/* Preview Column */}
-      <div className="space-y-4 sticky top-8">
+      <div className="space-y-4 lg:sticky top-8">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle>Image Preview</CardTitle>
             <CardDescription>Compare original and converted images.</CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
             <div className="text-center space-y-2">
                 <h3 className="font-semibold">Original</h3>
                 {sourcePreview && <Image src={sourcePreview} alt="Original" width={sourceDimensions?.width || 300} height={sourceDimensions?.height || 300} className="rounded-md object-contain w-full h-auto" />}
@@ -293,7 +292,7 @@ export default function RTPhotoConverterApp() {
             </div>
             <div className="text-center space-y-2 relative">
                 <h3 className="font-semibold">Converted</h3>
-                {isProcessing && <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-md"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}
+                {isProcessing && <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-md"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}
                 {convertedPreview ? <Image src={convertedPreview} alt="Converted" width={outputWidth} height={outputHeight} className="rounded-md object-contain w-full h-auto" /> : <div className="h-full w-full bg-muted rounded-md flex items-center justify-center"><ImageIcon className="w-12 h-12 text-muted-foreground" /></div>}
                 <p className="text-sm text-muted-foreground">{outputWidth} x {outputHeight}px - {convertedSize ? (convertedSize / 1024).toFixed(1) + " KB" : "..."}</p>
             </div>
@@ -310,7 +309,7 @@ export default function RTPhotoConverterApp() {
               Let AI choose the best settings for your needs.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
             <div className="sm:col-span-2">
               <Label htmlFor="optimization-goal">Optimization Goal</Label>
               <Select
@@ -327,7 +326,7 @@ export default function RTPhotoConverterApp() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="sm:col-span-1 self-end">
+            <div className="sm:col-span-1">
               <Button onClick={handleOptimize} disabled={isOptimizing} className="w-full">
                 {isOptimizing ? <Loader2 className="animate-spin" /> : <Sparkles />}
                 Optimize
