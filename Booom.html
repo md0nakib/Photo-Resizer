@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Video Overlay System</title>
+    <!-- Hind Siliguri Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #00e676;
+            --primary-dark: #00b25c;
+            --bg-dark: #050505;
+            --panel-bg: rgba(20, 20, 20, 0.95);
+            --text-main: #ffffff;
+            --border: #333;
+            --glass-bg: rgba(0, 0, 0, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Hind Siliguri', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- সেটআপ ফর্ম --- */
+        #setup-screen {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 30px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+            backdrop-filter: blur(15px);
+            z-index: 100;
+        }
+
+        #setup-screen::-webkit-scrollbar { width: 6px; }
+        #setup-screen::-webkit-scrollbar-thumb { background: #555; border-radius: 10px; }
+
+        .form-header { text-align: center; margin-bottom: 25px; }
+        .form-header h2 { font-size: 24px; font-weight: 700; color: var(--primary); letter-spacing: 0.5px; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 650px) { .form-grid { grid-template-columns: 1fr; } }
+
+        .form-group { display: flex; flex-direction: column; }
+        .form-group.full-width { grid-column: 1 / -1; }
+
+        label { font-size: 14px; font-weight: 500; margin-bottom: 6px; color: #ccc; }
+
+        input[type="text"], textarea, select, input[type="file"] {
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border);
+            color: #fff;
+            border-radius: 8px;
+            font-family: 'Hind Siliguri', sans-serif;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus, textarea:focus, select:focus {
+            border-color: var(--primary);
+            background: rgba(0, 230, 118, 0.05);
+        }
+
+        .range-wrap {
+            display: flex; align-items: center; gap: 15px;
+            background: rgba(0,0,0,0.4); padding: 8px 15px;
+            border-radius: 8px; border: 1px solid var(--border);
+        }
+        
+        input[type="range"] { flex-grow: 1; accent-color: var(--primary); cursor: pointer; }
+        input[type="color"] { width: 100%; height: 42px; border: none; border-radius: 8px; cursor: pointer; background: rgba(0,0,0,0.4); padding: 2px; }
+
+        button {
+            grid-column: 1 / -1; padding: 14px; margin-top: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #000; border: none; border-radius: 10px;
+            font-size: 18px; font-weight: 700; font-family: 'Hind Siliguri', sans-serif;
+            cursor: pointer; box-shadow: 0 4px 15px rgba(0, 230, 118, 0.2); transition: all 0.3s;
+        }
+
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 230, 118, 0.4); }
+
+        /* --- প্রিভিউ স্ক্রিন ও নতুন লেআউট --- */
+        #preview-screen {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            background: #050505;
+            position: fixed;
+            top: 0; left: 0;
+            flex-direction: column; /* ওপর-নিচ লেআউট */
+        }
+
+        /* ভিডিও ও কন্টেন্ট এরিয়া (মাঝখানে) */
+        #content-wrapper {
+            flex-grow: 1;
+            width: 100%;
+            height: calc(100vh - 80px); /* নিচের বাটন এরিয়ার জায়গা বাদ দিয়ে */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
+
+        /* ঠিক ৯:১৬ অনুপাতের মূল ফ্রেম এবং লাল বর্ডার */
+        #content-area {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            /* উচ্চতা এবং প্রস্থকে ৯:১৬ তে আটকে রাখা */
+            max-width: calc((100vh - 80px) * (9 / 16));
+            max-height: calc(100vw * (16 / 9));
+            aspect-ratio: 9 / 16;
+            overflow: hidden;
+            /* স্ক্রিন রেকর্ডার সেট করার সুবিধার জন্য লাল বর্ডার */
+            border: 2px solid #ff3333; 
+            border-radius: 4px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            background: #000;
+        }
+
+        /* ভিডিও এখন শুধুমাত্র লাল বর্ডারের ভেতর থাকবে */
+        video {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; object-fit: cover; z-index: 1;
+        }
+
+        .layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+        /* --- প্রফেশনাল UI গ্রাফিক্স লেয়ার --- */
+        #ui-layer {
+            z-index: 10;
+            padding: 15px; /* চারপাশ থেকে হালকা গ্যাপ */
+            display: flex; flex-direction: column; justify-content: space-between;
+            pointer-events: none;
+        }
+
+        /* উপরের বার (Top HUD) */
+        .top-hud {
+            display: flex; justify-content: space-between; align-items: center; gap: 8px;
+        }
+
+        .hud-pill {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            padding: 4px 10px; border-radius: 15px;
+            font-size: 13px; font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .hud-pill.live-badge {
+            background: rgba(220, 20, 60, 0.9);
+            border-color: rgba(255, 100, 100, 0.4);
+            color: #fff; font-weight: 600;
+        }
+
+        .live-dot {
+            width: 6px; height: 6px; background: #fff; border-radius: 50%;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* চলমান নোট (News Ticker) */
+        .marquee-wrapper {
+            margin-top: 10px;
+            background: linear-gradient(90deg, rgba(200, 15, 40, 0.95), rgba(120, 0, 0, 0.85));
+            border-radius: 6px; padding: 6px 10px;
+            overflow: hidden; white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border-left: 3px solid #fff;
+        }
+
+        .marquee-content {
+            display: inline-block; padding-left: 100%;
+            animation: scroll-left 15s linear infinite;
+            font-size: 15px; font-weight: 500;
+        }
+
+        @keyframes scroll-left {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* মাঝখানে বিস্তারিত */
+        .center-details-wrapper {
+            flex-grow: 1; display: flex; justify-content: center; align-items: center;
+        }
+
+        .center-details {
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 20px 25px; border-radius: 12px;
+            width: 100%; text-align: center;
+            font-size: 17px; line-height: 1.5; font-weight: 500;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+        }
+
+        /* নিচের অংশ (Bottom HUD) */
+        .bottom-hud {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            margin-bottom: 15px; /* লাল বর্ডারের ভেতরে নিচ থেকে একটু গ্যাপ */
+        }
+
+        /* নাম ও পদবী (Lower Third) */
+        .lower-third {
+            display: flex; flex-direction: column;
+            border-radius: 6px; overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            border-left: 4px solid var(--primary);
+        }
+
+        .name-box {
+            background: var(--primary); color: #000;
+            padding: 6px 16px; font-size: 20px; font-weight: 700;
+        }
+
+        .title-box {
+            background: rgba(20, 20, 20, 0.9); backdrop-filter: blur(5px);
+            color: #fff; padding: 4px 16px; font-size: 14px; font-weight: 400;
+        }
+
+        /* লোগো */
+        .logo-box img {
+            max-width: 60px; max-height: 60px; border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.8);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            object-fit: cover; background: #fff; display: none;
+        }
+
+        /* --- কন্ট্রোল এরিয়া (লাল বর্ডারের সম্পূর্ণ বাইরে এবং নিচে) --- */
+        #controls-area {
+            width: 100%;
+            height: 80px; /* নিচের অংশের উচ্চতা */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #111;
+            border-top: 1px solid #222;
+            z-index: 100;
+        }
+
+        /* স্টপ বাটন */
+        #close-btn {
+            padding: 10px 35px; background: rgba(220, 20, 60, 0.9);
+            backdrop-filter: blur(5px); color: white;
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 30px;
+            font-family: 'Hind Siliguri', sans-serif; font-size: 16px; font-weight: 600;
+            cursor: pointer; pointer-events: auto; transition: 0.3s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        #close-btn:hover { background: red; transform: translateY(-2px); }
+
+        /* --- স্পেশাল ইফেক্টস --- */
+        .fx-noise {
+            background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+            mix-blend-mode: overlay;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- সেটআপ স্ক্রিন -->
+    <div id="setup-screen">
+        <div class="form-header">
+            <h2>ভিডিও ওভারলে সিস্টেম</h2>
+        </div>
+        
+        <div class="form-grid">
+            <div class="form-group">
+                <label>ক্যামেরা সিলেক্ট করুন:</label>
+                <select id="camSelect">
+                    <option value="user">ফ্রন্ট ক্যামেরা (Front)</option>
+                    <option value="environment">ব্যাক ক্যামেরা (Back)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>ইফেক্ট সিলেক্ট করুন:</label>
+                <select id="effectSelect">
+                    <option value="none">কোনোটি না (None)</option>
+                    <option value="blur">ব্লার (Blur)</option>
+                    <option value="noise">জিরজির (Noise)</option>
+                    <option value="lines">লাইন বক্স (Line Box)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>ইফেক্ট সাইজ/ঘনত্ব:</label>
+                <div class="range-wrap">
+                    <input type="range" id="effectDensity" min="1" max="200" value="100">
+                    <span id="densityVal" style="width: 45px; text-align: right;">100%</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>ইফেক্ট ট্রান্সপারেন্সি (স্বচ্ছতা):</label>
+                <div class="range-wrap">
+                    <input type="range" id="effectOpacity" min="0" max="100" value="50">
+                    <span id="opacityVal" style="width: 45px; text-align: right;">50%</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>নাম:</label>
+                <input type="text" id="inputName" placeholder="আপনার নাম লিখুন">
+            </div>
+
+            <div class="form-group">
+                <label>পদবী:</label>
+                <input type="text" id="inputTitle" placeholder="আপনার পদবী লিখুন">
+            </div>
+
+            <div class="form-group">
+                <label>কালার ফিল্টার:</label>
+                <input type="color" id="colorFilter" value="#000000">
+            </div>
+
+            <div class="form-group">
+                <label>লোগো (ছবি আপলোড):</label>
+                <input type="file" id="inputLogo" accept="image/*">
+            </div>
+
+            <div class="form-group full-width">
+                <label>চলমান নোট (ডান থেকে বামে):</label>
+                <input type="text" id="inputNote" placeholder="ব্রেকিং নিউজ বা গুরুত্বপূর্ণ মেসেজ লিখুন...">
+            </div>
+
+            <div class="form-group full-width">
+                <label>বিস্তারিত (মাঝখানে দেখাবে):</label>
+                <textarea id="inputDetails" rows="3" placeholder="মাঝখানের জন্য বিস্তারিত তথ্য লিখুন..."></textarea>
+            </div>
+
+            <button id="startBtn">প্রিভিউ শুরু করুন</button>
+        </div>
+    </div>
+
+    <!-- প্রিভিউ স্ক্রিন -->
+    <div id="preview-screen">
+        
+        <!-- মূল কন্টেন্ট এবং ভিডিওর অংশ -->
+        <div id="content-wrapper">
+            <!-- ৯:১৬ রেশিওর লাল বর্ডারের ফ্রেম -->
+            <div id="content-area">
+                
+                <!-- মেইন ভিডিও -->
+                <video id="webcam" autoplay playsinline muted></video>
+
+                <div id="color-filter" class="layer"></div>
+                <div id="effect-layer" class="layer"></div>
+                
+                <!-- প্রফেশনাল UI লেয়ার -->
+                <div id="ui-layer" class="layer">
+                    
+                    <!-- উপরের অংশ -->
+                    <div>
+                        <div class="top-hud">
+                            <div class="hud-pill">
+                                <span id="time-current">00:00:00</span>
+                            </div>
+                            <div class="hud-pill">
+                                শুরু: <span id="time-start">00:00</span>
+                            </div>
+                            <div class="hud-pill live-badge">
+                                <div class="live-dot"></div>
+                                <span id="time-elapsed">00:00</span>
+                            </div>
+                        </div>
+
+                        <!-- চলমান নোট -->
+                        <div class="marquee-wrapper" id="marquee-container">
+                            <div class="marquee-content" id="display-note"></div>
+                        </div>
+                    </div>
+
+                    <!-- মাঝখানের অংশ -->
+                    <div class="center-details-wrapper">
+                        <div class="center-details" id="display-details"></div>
+                    </div>
+
+                    <!-- নিচের অংশ -->
+                    <div class="bottom-hud">
+                        <!-- নাম ও পদবী -->
+                        <div class="lower-third" id="name-container">
+                            <div class="name-box" id="display-name"></div>
+                            <div class="title-box" id="display-title"></div>
+                        </div>
+
+                        <!-- লোগো -->
+                        <div class="logo-box">
+                            <img id="logo-display" src="" alt="Logo">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- কন্ট্রোল এরিয়া (লাল বর্ডারের সম্পূর্ণ বাইরে এবং স্ক্রিনের নিচে) -->
+        <div id="controls-area">
+            <button id="close-btn" onclick="stopPreview()">বন্ধ করুন</button>
+        </div>
+
+    </div>
+
+    <script>
+        // স্লাইডার টেক্সট
+        document.getElementById('effectDensity').addEventListener('input', function() {
+            let val = parseInt(this.value);
+            document.getElementById('densityVal').innerText = val > 100 ? `Max (${val})` : val + '%';
+        });
+        document.getElementById('effectOpacity').addEventListener('input', function() {
+            document.getElementById('opacityVal').innerText = this.value + '%';
+        });
+
+        // DOM Elements
+        const setupScreen = document.getElementById('setup-screen');
+        const previewScreen = document.getElementById('preview-screen');
+        const videoElement = document.getElementById('webcam');
+        let currentStream = null;
+        let timerInterval = null;
+        let startTime = null;
+
+        // লোগো আপলোড
+        document.getElementById('inputLogo').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const logoImg = document.getElementById('logo-display');
+                    logoImg.src = event.target.result;
+                    logoImg.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // প্রিভিউ শুরু
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            
+            // ফুলস্ক্রিন রিকোয়েস্ট
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                }
+            } catch (e) { console.log("Fullscreen API error:", e); }
+
+            // ইনপুট ভ্যালু
+            const camMode = document.getElementById('camSelect').value;
+            const effectType = document.getElementById('effectSelect').value;
+            const density = document.getElementById('effectDensity').value;
+            const opacity = document.getElementById('effectOpacity').value;
+            const color = document.getElementById('colorFilter').value;
+            
+            const name = document.getElementById('inputName').value;
+            const title = document.getElementById('inputTitle').value;
+            const note = document.getElementById('inputNote').value;
+            const details = document.getElementById('inputDetails').value;
+
+            // ডেটা UI তে বসানো
+            const nameContainer = document.getElementById('name-container');
+            if(name.trim() === '' && title.trim() === '') {
+                nameContainer.style.display = 'none';
+            } else {
+                nameContainer.style.display = 'flex';
+                document.getElementById('display-name').innerText = name;
+                document.getElementById('display-title').innerText = title;
+                
+                document.getElementById('display-name').style.display = name.trim() ? 'block' : 'none';
+                document.getElementById('display-title').style.display = title.trim() ? 'block' : 'none';
+            }
+
+            const marqueeContainer = document.getElementById('marquee-container');
+            if(note.trim() === '') {
+                marqueeContainer.style.display = 'none';
+            } else {
+                marqueeContainer.style.display = 'block';
+                document.getElementById('display-note').innerText = note;
+            }
+            
+            const detailsEl = document.getElementById('display-details');
+            if(details.trim() === '') {
+                detailsEl.style.display = 'none';
+            } else {
+                detailsEl.style.display = 'block';
+                detailsEl.innerHTML = details.replace(/\n/g, '<br>'); 
+            }
+
+            // ইফেক্ট ও ফিল্টার
+            const effectLayer = document.getElementById('effect-layer');
+            const colorFilterLayer = document.getElementById('color-filter');
+
+            effectLayer.className = 'layer'; 
+            effectLayer.style.cssText = ''; 
+            effectLayer.style.backdropFilter = 'none';
+            
+            if(color !== '#000000') {
+                colorFilterLayer.style.backgroundColor = color;
+                colorFilterLayer.style.opacity = opacity / 100;
+                colorFilterLayer.style.mixBlendMode = 'color';
+            } else {
+                colorFilterLayer.style.backgroundColor = 'transparent';
+            }
+
+            const opVal = opacity / 100;
+            if (effectType === 'blur') {
+                const blurPx = (density / 100) * 40; 
+                effectLayer.style.backdropFilter = `blur(${blurPx}px)`;
+                effectLayer.style.opacity = opVal;
+            } 
+            else if (effectType === 'noise') {
+                effectLayer.classList.add('fx-noise');
+                const noiseOpacity = Math.min(1, opVal * (1 + density/200));
+                effectLayer.style.opacity = noiseOpacity;
+                const bgSize = Math.max(20, 200 - density); 
+                effectLayer.style.backgroundSize = `${bgSize}%`; 
+            } 
+            else if (effectType === 'lines') {
+                let gap = 40 - (density * 0.18); 
+                gap = Math.max(1, gap); 
+                const strongOpacity = Math.min(1, opVal * 1.5);
+                effectLayer.style.background = `repeating-linear-gradient(
+                    0deg, transparent, transparent ${gap}px, 
+                    rgba(255,255,255,0.1) ${gap}px, 
+                    rgba(0,0,0, ${strongOpacity}) ${gap + (density > 100 ? 3 : 2)}px
+                )`;
+                effectLayer.style.opacity = 1;
+            }
+
+            // ক্যামেরা এক্সেস
+            try {
+                if(currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: camMode }
+                });
+                videoElement.srcObject = stream;
+                currentStream = stream;
+
+                // স্ক্রিন পরিবর্তন
+                setupScreen.style.display = 'none';
+                previewScreen.style.display = 'flex'; 
+
+                startClock();
+            } catch(err) {
+                alert("ক্যামেরা এক্সেস করা যায়নি! ব্রাউজারের পারমিশন চেক করুন।\n" + err.message);
+            }
+        });
+
+        // সময় এবং টাইমার
+        function startClock() {
+            startTime = Date.now();
+            const startStr = new Date().toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('time-start').innerText = startStr;
+
+            if(timerInterval) clearInterval(timerInterval);
+            
+            timerInterval = setInterval(() => {
+                const now = new Date();
+                
+                document.getElementById('time-current').innerText = now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                
+                const elapsedSec = Math.floor((now.getTime() - startTime) / 1000);
+                const hrs = String(Math.floor(elapsedSec / 3600)).padStart(2, '0');
+                const mins = String(Math.floor((elapsedSec % 3600) / 60)).padStart(2, '0');
+                const secs = String(elapsedSec % 60).padStart(2, '0');
+                
+                if(hrs !== '00') {
+                    document.getElementById('time-elapsed').innerText = `${hrs}:${mins}:${secs}`;
+                } else {
+                    document.getElementById('time-elapsed').innerText = `${mins}:${secs}`;
+                }
+            }, 1000);
+        }
+
+        // প্রিভিউ বন্ধ করা
+        function stopPreview() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(err => console.log(err));
+            }
+            if(currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            clearInterval(timerInterval);
+            previewScreen.style.display = 'none';
+            setupScreen.style.display = 'block';
+        }
+    </script>
+</body>
+  </html>
